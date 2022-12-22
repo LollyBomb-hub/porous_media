@@ -2,3 +2,5 @@ cmake-*/
 .idea/
 
 *.png
+*.gif
+*.rar
