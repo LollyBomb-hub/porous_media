@@ -27,18 +27,6 @@ typedef float CONTAINER_TYPE;
 const FLOAT_TYPE eps = FLT_EPSILON;
 #endif
 
-FLOAT_TYPE concentration_front(const std::function<FLOAT_TYPE(FLOAT_TYPE)> &f_flow_rate, FLOAT_TYPE h, INDEX_TYPE n, INDEX_TYPE multiplier = 100,
-                    FLOAT_TYPE result_0 = FLOAT_TYPE(0)) {
-    FLOAT_TYPE result = result_0;
-    n *= multiplier;
-    h /= FLOAT_TYPE(multiplier);
-    for (INDEX_TYPE i = 0; i < n; i++) {
-        result += h * f_flow_rate(h * FLOAT_TYPE(i));
-    }
-    return result;
-}
-
-
 bool check_differs(FLOAT_TYPE a, FLOAT_TYPE b) {
     return fabs(a - b) > eps;
 }
@@ -66,13 +54,13 @@ int main(int argc, char **argv) {
     const INDEX_TYPE M = root.get("M", (INDEX_TYPE) 0).asInt64();
     const INDEX_TYPE N = root.get("N", (INDEX_TYPE) 0).asInt64();
 
-    const FLOAT_TYPE dx = (FLOAT_TYPE)root.get("dx", double(1)).as<double>();
-    const FLOAT_TYPE dt = (FLOAT_TYPE)root.get("dt", double(1)).as<double>();
-    const FLOAT_TYPE delta_0 = (FLOAT_TYPE)root.get("delta_0", double(1)).as<double>();
-    const FLOAT_TYPE s_m = (FLOAT_TYPE)root.get("s_m", double(1)).as<double>();
-    const FLOAT_TYPE c_x_0 = (FLOAT_TYPE)root.get("C_x_0", double(0)).as<double>();
-    const FLOAT_TYPE c_0_t = (FLOAT_TYPE)root.get("C_0_t", double(1)).as<double>();
-    const FLOAT_TYPE s_x_0 = (FLOAT_TYPE)root.get("S_x_0", double(0)).as<double>();
+    const FLOAT_TYPE dx = (FLOAT_TYPE) root.get("dx", double(1)).as<double>();
+    const FLOAT_TYPE dt = (FLOAT_TYPE) root.get("dt", double(1)).as<double>();
+    const FLOAT_TYPE delta_0 = (FLOAT_TYPE) root.get("delta_0", double(1)).as<double>();
+    const FLOAT_TYPE s_m = (FLOAT_TYPE) root.get("s_m", double(1)).as<double>();
+    const FLOAT_TYPE c_x_0 = (FLOAT_TYPE) root.get("C_x_0", double(0)).as<double>();
+    const FLOAT_TYPE c_0_t = (FLOAT_TYPE) root.get("C_0_t", double(1)).as<double>();
+    const FLOAT_TYPE s_x_0 = (FLOAT_TYPE) root.get("S_x_0", double(0)).as<double>();
 
     std::cout << "Configuration:\n";
     out("M", M)
@@ -86,15 +74,19 @@ int main(int argc, char **argv) {
     out("s_x_0", s_x_0)
     std::cout << '\n';
 
+    const std::function<FLOAT_TYPE(FLOAT_TYPE)> concentration_front = [delta_0, s_m](FLOAT_TYPE t) {
+        return (s_m / delta_0) * (FLOAT_TYPE(1) - exp(-delta_0 * t / s_m));
+    };
+
     const std::function<FLOAT_TYPE(FLOAT_TYPE)> S_0 = [delta_0, s_m](FLOAT_TYPE t) {
-        return s_m * (1. - exp(-delta_0 * t / s_m));
+        return s_m * (FLOAT_TYPE(1) - exp(-delta_0 * t / s_m));
     };
 
     const std::function<FLOAT_TYPE(FLOAT_TYPE)> flow_rate = [delta_0, S_0, s_m](FLOAT_TYPE t) {
         return exp(-delta_0 * t / s_m);
     };
     const std::function<FLOAT_TYPE(FLOAT_TYPE)> Delta = [delta_0, s_m](FLOAT_TYPE S) {
-        return delta_0 * (1 - S / s_m);
+        return delta_0 * (FLOAT_TYPE(1) - S / s_m);
     };
 
 
@@ -121,7 +113,7 @@ int main(int argc, char **argv) {
 
     for (j = 0; j < M; j++) {
         // Вычисление точек фронта концентрации
-        const auto concentration_front_at_t_j = concentration_front(flow_rate, dt, j);
+        const auto concentration_front_at_t_j = concentration_front(dt * FLOAT_TYPE (j));
         concentration_front_at_t.push_back(concentration_front_at_t_j);
         // Проверка с точным решением
         // Вычисление точек скорости распространения суспензии
@@ -132,7 +124,7 @@ int main(int argc, char **argv) {
     // 'i' is for x measure, 'j' is for time measure
     for (j = 0; j < M - 1; j++) {
         const auto flow_rate_j = flow_rate_at_t[j];
-        const auto concentration_front = concentration_front_at_t[j];
+        const auto concentration_front_v = concentration_front_at_t[j];
         const auto concentration_front_next = concentration_front_at_t[j + 1];
         for (i = 0; i < N - 1; i++) {
             const auto x_i = FLOAT_TYPE(i) * dx;
@@ -145,7 +137,7 @@ int main(int argc, char **argv) {
             const auto ds_next_dt = Delta(s_i_next_j) * c.coeff(i + 1, j);
             s.coeffRef(i + 1, j + 1) = ds_next_dt * dt + s_i_next_j;
             const bool c2 = check_differs(s_i_next_j, s.coeff(i + 1, j + 1));
-            if (((concentration_front_next - x_i_next) > eps) && ((concentration_front - x_i) > eps)) {
+            if (((concentration_front_next - x_i_next) > eps) && ((concentration_front_v - x_i) > eps)) {
                 const auto c_i_j_next = c.coeff(i, j + 1);
                 const auto dc_dt = (c_i_j_next - c_i_j) / dt;
                 const bool c1 = check_differs(c.coeff(i + 1, j), c.coeff(i + 1, j - 1));
@@ -173,8 +165,8 @@ int main(int argc, char **argv) {
                               << ((c_i_j_next - c_i_j) + (flow_rate_j * (c_i_next_j_next - c_i_j_next)) +
                                   (Delta(s_i_j) * c_i_j * dt)) << " = 0?" << '\n';
 
-                    std::cerr << "t = " << dt * j << '\n';
-                    std::cerr << "x = " << x_i << " Concentration front G " << concentration_front << '\n';
+                    std::cerr << "t = " << dt * FLOAT_TYPE(j) << '\n';
+                    std::cerr << "x = " << x_i << " Concentration front G " << concentration_front_v << '\n';
                     std::cerr << "i = " << i << " j = " << j << '\n';
                     exit(3);
                 }
@@ -212,14 +204,10 @@ int main(int argc, char **argv) {
                 }
             }
             output << x << ';' << t << ';'
-                   //<< i << ';' << j << ';'
                    << c_i_j << ';'
                    << s_i_j << ';'
                    << flow_rate_at_t[j] << ';'
                    << concentration_front_at_t[j] << ';'
-//                   << dc_dx << ';'
-//                   << dc_dt << ';'
-//                   << ds_dt << ';'
                    << '\n';
         }
     }
