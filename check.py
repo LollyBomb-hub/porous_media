@@ -1,17 +1,14 @@
-import glob
 import contextlib
-
-from PIL import Image
-
+import glob
 import json
+import os
 import os.path as path
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+from PIL import Image
 from pandas import DataFrame
-
-import decimal
 
 CONFIGURATION_FILE_PATH: str = "C:/Users/a.pesterev/CLionProjects/porous_media/configuration.json"
 RESULT_FOLDER_PATH: str = r"C:\Users\a.pesterev\CLionProjects\porous_media\cmake-build-release-visual-studio\results"
@@ -21,10 +18,10 @@ assert path.exists(CONFIGURATION_FILE_PATH), f"Configuration file path does not 
 with open(CONFIGURATION_FILE_PATH) as configuration_file:
     CONFIGURATION: dict = json.load(configuration_file)
 
-RESULT_FILE: str = path.join(RESULT_FOLDER_PATH, "result.csv")
+RESULT_FILE: str = path.join(RESULT_FOLDER_PATH, "result101_400001.csv")
 
 df: DataFrame = pd.read_csv(RESULT_FILE, sep=';', skiprows=4, index_col=False,
-                            dtype={'c': np.float64, 's': np.float64, 'x': np.float64, 't': np.float64})
+                            dtype={'c': np.float64, 's': np.float64, 'x': np.float64, 't': np.float64}, na_values='-nan(ind)')
 
 ANALYTIC_SOLUTION_IS_KNOWN = False
 
@@ -41,7 +38,7 @@ def plot_with_condition(passed_df: pd.DataFrame, condition_instance: object, **k
     fixed_x_df.plot(**kwargs)
 
 
-def make_gif_from_pngs(png_files_regex: str | list[str], output_file: str):
+def make_gif_from_pngs(png_files_regex: str | list[str], output_file: str, duration: int = 200):
     # use exit stack to automatically close opened images
     with contextlib.ExitStack() as stack:
         # lazily load images
@@ -59,40 +56,39 @@ def make_gif_from_pngs(png_files_regex: str | list[str], output_file: str):
 
         # https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#gif
         img.save(fp=output_file, format='GIF', append_images=imgs,
-                 save_all=True, duration=200, loop=0)
+                 save_all=True, duration=duration, loop=0)
 
 
-H: float = CONFIGURATION['h']
-DECIMAL_PLACES = abs(decimal.Decimal(str(H)).as_tuple().exponent)
+mult = 500
+RDX: float = CONFIGURATION['dx']
+DX: float = CONFIGURATION['dx'] * mult
+COUNT_X_DOTS: int = int(CONFIGURATION['N'] / mult)
 
-H = 0.05
-MAX_X_TO_PLOT = 1
+print(df.columns)
 
-plotted_xs: list[int | float] = list(map(
-    lambda el: float((('%.' + str(DECIMAL_PLACES) + 'f') % round(el, DECIMAL_PLACES))),
-    np.arange(0, MAX_X_TO_PLOT + H, H)
-))
+print(df.head(5))
 
-print(plotted_xs)
+plotted_xs: list[int] = list(map(lambda el: el * mult, range(COUNT_X_DOTS)))
 
 subplot_numbers: list[int] = [111 for _ in range(len(plotted_xs))]
 
 C_COORDINATE = 'c(i, j)'
 
-print(C_COORDINATE in df.columns)
-print(df[df[f"{C_COORDINATE}"] < 0])
-
 output_filenames: list[str] = list()
 
-plotted_x: int | float
+if not os.path.exists("./images/"):
+    os.mkdir("./images")
+
+plotted_x_i: int
 subplot_number: int
-for plotted_x, subplot_number in zip(plotted_xs, subplot_numbers):
+for plotted_x_i, subplot_number in zip(plotted_xs, subplot_numbers):
+    plotted_x: float = plotted_x_i * RDX
     ax: plt.Axes = plt.subplot(subplot_number)
-    condition = df.x == plotted_x
+    condition = df.i == plotted_x_i
     args: dict[str, str | object] = dict(
         kind="line",
         x="t",
-        title=f"При x = {str(plotted_x)}",
+        title=f"При x = {str(round(plotted_x, len(str(mult))))}",
         ax=ax,
         xlabel="Время, t"
     )
@@ -104,13 +100,14 @@ for plotted_x, subplot_number in zip(plotted_xs, subplot_numbers):
     if ANALYTIC_SOLUTION_IS_KNOWN:
         plot_with_condition(df, condition, y="s_e", label='Аналитическое решение для осадка', linestyle='-.', **args)
     plt.legend()
-    filename: str = f'x={int(plotted_x / H)}.png'
+    filename: str = f'images/x={int(plotted_x_i / mult)}.png'
     output_filenames.append(filename)
     plt.savefig(filename)
     ax.cla()
     plt.clf()
 
-make_gif_from_pngs(output_filenames, 'output.gif')
+make_gif_from_pngs(output_filenames, 'output200.gif')
+make_gif_from_pngs(output_filenames, 'output50.gif', duration=50)
 
 # plotted_ts: list[int | float] = [0.5, 1, 2, 5, 10, 20, 50, 100]
 #
