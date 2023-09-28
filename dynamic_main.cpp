@@ -7,7 +7,7 @@
 
 #define out(mes, val) std::cout << "\t" << mes << ": " << val << '\n';
 
-#define INDEX_TYPE long long
+#define INDEX_TYPE int32_t
 
 #define IS_DOUBLE
 
@@ -19,14 +19,14 @@ typedef long long INTEGER_TYPE;
 typedef double FLOAT_TYPE;
 typedef double CONTAINER_TYPE;
 constexpr FLOAT_TYPE eps = DBL_EPSILON;
-constexpr INTEGER_TYPE precision = 16;
+constexpr INTEGER_TYPE precision = DBL_DIG;
 #endif
 #else
 typedef long long INTEGER_TYPE;
 typedef float FLOAT_TYPE;
 typedef float CONTAINER_TYPE;
 constexpr FLOAT_TYPE eps = FLT_EPSILON;
-constexpr INTEGER_TYPE precision = 6;
+constexpr INTEGER_TYPE precision = FLT_DIG;
 #endif
 
 const FLOAT_TYPE one = FLOAT_TYPE(1);
@@ -36,6 +36,14 @@ const FLOAT_TYPE one = FLOAT_TYPE(1);
 #include <vector>
 #include "methods.hpp"
 #include "dynamic_grid.hpp"
+
+double __fastcall two_sum (double &t, double a, double b) {
+    double s = a+b;
+    double bs = s-a;
+    double as = s-bs;
+    t = (b-bs) + (a-as);
+    return s;
+}
 
 int main(int argc, char **argv) {
     std::cout << "Starting program!\n";
@@ -80,15 +88,16 @@ int main(int argc, char **argv) {
         return F0 * S;
     };
 
-    const std::function<FLOAT_TYPE(FLOAT_TYPE)> S_0 = [delta_0, A](FLOAT_TYPE t) {
-        return (delta_0 / A) * (one - exp(-A * t));
+    const std::function<FLOAT_TYPE(FLOAT_TYPE)> S_0 = [delta_0, s_m, F0, A](FLOAT_TYPE t) {
+        return -delta_0*s_m*(exp(-(delta_0+F0)*t)-1)/(delta_0+F0);
     };
 
     const std::function<FLOAT_TYPE(FLOAT_TYPE)> flow_rate = [delta_0, A, F0, v_0](FLOAT_TYPE t) {
-        return (v_0 / A) * (F0 + delta_0 * exp(-A * t));
+//        return (v_0 / A) * (F0 + delta_0 * exp(-A * t));
+        return v_0;
     };
     const std::function<FLOAT_TYPE(FLOAT_TYPE)> Delta = [delta_0, s_m](FLOAT_TYPE S) {
-        return delta_0 * (one - (S / s_m));
+        return delta_0 * (s_m - S);
     };
 
     auto dots_G = std::vector<FLOAT_TYPE>();
@@ -138,8 +147,7 @@ int main(int argc, char **argv) {
         x += dx;
         dots_G.push_back(x);
         deltas.push_back(dx);
-        std::cout << "t: " << t << " x: " << x << " dx: " << dx << '\n';
-//        std::cout << dx << ' ' << x << '\n';
+//        std::cout << "t: " << t << " x: " << x << " dx: " << dx << '\n';
     }
 
     const auto max_j = j;
@@ -150,22 +158,32 @@ int main(int argc, char **argv) {
 
     std::cout.precision(precision);
 
+    double e = 0.;
+
     for (j = 0; j + 1 < max_j; j++) {
-        const auto next_t = t + dt;
+        auto next_t_s = two_sum(e, t, dt);
+        const auto next_t = next_t_s + e;
         if (j % 100 == 0) { std::cout << t << '\n'; }
         for (i = 0; i <= j; i++) {
-//            std::cout << i << ' ' << j << '\n';
+            /*
+             * Iterating over each x in given time
+             */
+
             const auto c_x_t = C.get(i, j);
             const auto s_x_t = S.get(i, j);
             auto s_x_next_t_next = FLOAT_TYPE (0.);
             if (i < j) {
+                const auto x_i_j = get_x(i, j, deltas);
+                const auto x_i_next_j = get_x(i + 1, j, deltas);
+                const auto x_i_next_j_next = get_x(i + 1, j + 1, deltas);
+                const auto s_l = s_x_t + dt * (Delta(s_x_t) * c_x_t - F(s_x_t));
                 const auto s_x_next_t = S.get(i + 1, j);
                 const auto c_x_next_t = C.get(i + 1, j);
-                const auto ds_dt = Delta(s_x_next_t) * c_x_next_t - F(s_x_next_t);
-                s_x_next_t_next = ds_dt * dt + s_x_next_t;
+                const auto s_r = s_x_next_t + dt * (Delta(s_x_next_t) * c_x_next_t - F(s_x_next_t));
+                s_x_next_t_next = interpolate(s_l, s_r, x_i_j, x_i_next_j, x_i_next_j_next);
             }
-            const auto m1 = one - half_dt * (Delta(s_x_t) - F(s_x_next_t_next) - F(s_x_t));
             S.put(i + 1, j + 1, s_x_next_t_next);
+            const auto m1 = one - half_dt * (Delta(s_x_t) - F(s_x_next_t_next) - F(s_x_t));
             const auto m2 = one + half_dt * Delta(s_x_next_t_next);
             C.put(i + 1, j + 1, c_x_t * (m1 / m2));
         }

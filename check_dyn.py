@@ -45,7 +45,7 @@ del s_df
 c_df = c_df.sort_values(['ix', 'iy'])
 
 # Interpolating procedure
-print(c_df)
+print(c_df.x, c_df.c + c_df.s)
 
 
 def test_plot_iy(dataframe, iy, max_iy=1999):
@@ -109,20 +109,29 @@ LEGEND_SETTINGS = {
 print(f"MAX_X = {MAX_X}")
 
 test_dots = np.stack([c_df.x.values, c_df.y.values], -1)
+
+print("Got test dots")
+
 with open("interp_c", mode='rb') as f:
     interp_c = pickle.load(f)
 
-# print(max(c_df.c.values - interp_c(test_dots)))
+with open("interp_s", mode='rb') as f:
+    interp_s = pickle.load(f)
 
+print("Loaded")
+
+# print(max(c_df.c.values - interp_c(test_dots)))
 
 if PLOT_3D:
     if MPL:
-        with open("interp_s", mode='rb') as f:
-            interp_s = pickle.load(f)
 
         interpolated_c = interp_c(test_dots)
         interpolated_s = interp_s(test_dots)
+
         print("Interpolated")
+
+        print(max(c_df.c.values - interpolated_c))
+        print(max(c_df.s.values - interpolated_s))
 
         # fig = plt.figure()
         # ax = fig.add_subplot(1, 3, 1, projection='3d')
@@ -188,9 +197,9 @@ if PLOT_3D:
         plt.clf()
         plt.cla()
     else:
-        X = c_df.ix.values
+        X = c_df.x.values
         # print(X)
-        Y = c_df.iy.values
+        Y = c_df.y.values
         # print(Y)
         Z_C = c_df.c.values
         # print(Z)
@@ -207,15 +216,17 @@ if PLOT_3D:
 
         # mlab.plot3d(X, Y, interpolated_s, interpolated_s, name='S(interp)', colormap='Spectral')
         mlab.plot3d(X, Y, Z_S, Z_S, name='S', colormap='Spectral')
+        mlab.plot3d(X, Y, Z_S + Z_C, name='their_sum', colormap='Spectral')
+        # mlab.plot3d(X, Y, interp_c(X, Y) - interp_s(X, Y) / 0.5, 'C - S', colormap='Spectral')
         # mlab.plot3d(X, Y, Z_S - interpolated_s, 'C - C(interp)', colormap='Spectral')
         mlab.axes(xlabel='X', ylabel='Y', zlabel='Z', ranges=[min(X), max(X), min(Y), max(Y), min(Z_S), max(Z_S)])
         mlab.show()
 
 subplot_number = 111
-plotted_t = [0.5, 1., 2., 5., 10.]
+plotted_t = [0.5, 1., 2., 5.]
 
 XMIN_T = 0
-XMAX_T = 1
+XMAX_T = 45
 YMIN = 0
 YMAX = 1
 
@@ -244,6 +255,9 @@ for plotted_t_v in plotted_t:
     plt.plot(x_v, c_v, label='Suspended concentration C', **PLOTTING_ARGS_C)
     plt.plot(x_v, s_v, label='Retained concentration S', **PLOTTING_ARGS_S)
 
+    plt.ylabel("C,S", rotation=0, y=1, horizontalalignment='right')
+    plt.xlabel("x", x=1, horizontalalignment='right')
+
     plt.legend(**LEGEND_SETTINGS)
     fig = plt.gcf()
     fig.set_size_inches(6, 6)
@@ -259,11 +273,14 @@ dt = CONFIGURATION['dt']
 t = np.arange(0, MAX_T + dt, dt)
 
 # for erosion!
-# plotted_xs = [0.1, 0.5, 1., 2., 5., 10., 20.]
+plotted_xs = [0.1, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85, 1., 2., 5., 10., 15., 20., 25., 30.]
 # no erosion
-plotted_xs = [0.1, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85, 1.]
+# plotted_xs = [0.1, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85, 1.]
 
 initial = c_df[c_df.ix == 0]
+
+XMIN_X = 0
+XMAX_X = 30
 
 subplot_number = 111
 ax: plt.Axes = plt.subplot(subplot_number)
@@ -271,6 +288,10 @@ plt.title(f"x = 0")
 ax.plot(initial.y, initial.c, label='Suspended concentration C', **PLOTTING_ARGS_C)
 ax.plot(initial.y, initial.s, label='Retained concentration S', **PLOTTING_ARGS_S)
 plt.legend(**LEGEND_SETTINGS)
+plt.xlim((XMIN_X, XMAX_X))
+plt.ylim((YMIN, YMAX))
+plt.ylabel("C,S", rotation=0, y=1., horizontalalignment='right')
+plt.xlabel("t", x=1., horizontalalignment='right')
 fig = plt.gcf()
 fig.set_size_inches(6, 6)
 plt.savefig("./images/x = 0.tiff", dpi=DPI)
@@ -291,10 +312,6 @@ def ds_dt(S, C):
         return F0 * S
 
     return Delta(S) * C - F(S)
-
-
-XMIN_X = 0
-XMAX_X = 30
 
 
 for plotted_x in plotted_xs:
@@ -330,6 +347,8 @@ for plotted_x in plotted_xs:
     plt.title(f"x = {plotted_x}")
     plt.xlim((XMIN_X, XMAX_X))
     plt.ylim((YMIN, YMAX))
+    plt.ylabel("C,S", rotation=0, y=1., horizontalalignment='right')
+    plt.xlabel("t", x=1., horizontalalignment='right')
     ax.plot(t, plotted_c, label='Suspended concentration C', **PLOTTING_ARGS_C)
     ax.plot(t, plotted_s, label='Retained concentration S', **PLOTTING_ARGS_S)
     plt.legend(**LEGEND_SETTINGS)
