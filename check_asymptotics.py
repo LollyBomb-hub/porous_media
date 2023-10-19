@@ -1,17 +1,29 @@
+import decimal
 import json
-import pickle
+import os.path as path
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from pandas import DataFrame
 
 with open("configuration.json", mode='r') as f:
     config = json.load(f)
 
-with open("interp_c", mode='rb') as f:
-    interp_c = pickle.load(f)
+Decimal = decimal.Decimal
 
-with open("interp_s", mode='rb') as f:
-    interp_s = pickle.load(f)
+decimal.getcontext().prec = 100
+
+RESULT_FOLDER_PATH: str = r"C:\Users\a.pesterev\CLionProjects\porous_media\cmake-build-release-visual-studio\results"
+
+CONCENTRATION: str = path.join(RESULT_FOLDER_PATH, "conc.dat")
+REST: str = path.join(RESULT_FOLDER_PATH, "rest.dat")
+
+c_df: DataFrame = pd.read_csv(CONCENTRATION, sep=';', skiprows=0, header=None, names=['ix', 'iy', 'x', 'y', 'c'],
+                              index_col=False)
+print(c_df)
+s_df: DataFrame = pd.read_csv(REST, sep=';', skiprows=0, header=None, names=['ix', 'iy', 'x', 'y', 's'],
+                              index_col=False)
 
 MAX_T = config['max_t']
 DT = config['dt']
@@ -26,11 +38,11 @@ Sm = lambda_p * S_max / (lambda_p + k)
 
 
 def Sasymp(x, t):
-    return Sm * (1 - np.exp(-(lambda_p + k) * (t - (1 + Sm) * x)))
+    return Decimal(Sm) * (Decimal(1) - Decimal(-(lambda_p + k) * Decimal(t - (1 + Sm) * x)).exp())
 
 
 def Casymp(x, t):
-    return 1 - (1 - np.exp(-(lambda_p + k) * Sm * x)) * np.exp(-(lambda_p + k) * (t - (1 + Sm) * x))
+    return Decimal(1) - (Decimal(1) - Decimal(-(lambda_p + k) * Sm * x).exp()) * Decimal(Decimal(-(lambda_p + k)) * Decimal(t - (1 + Sm) * x)).exp()
 
 
 # fig = plt.figure()
@@ -83,14 +95,23 @@ def Casymp(x, t):
 # plt.title(f't0 = t')
 # plt.show()
 
+def get_calced_C(ix, iy):
+    return c_df.loc[(c_df['ix'] == ix) & (c_df['iy'] == iy)]['c'].values[0]
 
-tested_xs = [0.1, 0.5, 1., 2., 5., 10.]
+
+def get_calced_S(ix, iy):
+    return s_df.loc[(s_df['ix'] == ix) & (s_df['iy'] == iy)]['s'].values[0]
+
+
+tested_xs = [int(0.1 / DT), int(0.5 / DT), int(1. / DT), int(2. / DT), int(5. / DT), int(10. / DT)]
 
 for i in range(len(tested_xs)):
+    # cf = open(f"results_x={tested_xs[i] * DT}_dt={DT}.csv", "w")
+    # cf.write("t;c;s;c_asymp;s_asymp;expc\n")
     dc = None
     ds = None
     expp = None
-    ts = np.arange(tested_xs[i], MAX_T, DT)
+    ts = range(tested_xs[i], int(MAX_T / DT))
     vc = list()
     vs = list()
     c_asymp = list()
@@ -100,57 +121,40 @@ for i in range(len(tested_xs)):
     v1 = list()
     v2 = list()
     for t in ts:
-        expc = float(np.exp(2 * lambda_p * t))
-        c_v = float(interp_c(tested_xs[i], t))
-        s_v = float(interp_s(tested_xs[i], t))
+        expc = Decimal(2 * lambda_p * t * DT).exp()
+        c_v = Decimal(float(get_calced_C(tested_xs[i], t)))
+        s_v = Decimal(float(get_calced_S(tested_xs[i], t)))
         vc.append(c_v)
         vs.append(s_v)
-        c_asymp_v = float(Casymp(tested_xs[i], t))
+        c_asymp_v = Decimal(Casymp(tested_xs[i] * DT, t * DT))
         c_asymp.append(c_asymp_v)
-        s_asymp_v = float(Sasymp(tested_xs[i], t))
+        s_asymp_v = Decimal(Sasymp(tested_xs[i] * DT, t * DT))
         s_asymp.append(s_asymp_v)
         v1.append(c_v - c_asymp_v)
         v2.append(s_v - s_asymp_v)
-        if expp is None:
-            expp = expc
-        if dc is None or dc == 0.:
-            dc = (c_v - c_asymp_v)
-            dltc.append(dc * expc)
-        else:
-            k2 = expc / expp
-            cd = c_v - c_asymp_v
-            k1 = cd / dc
-            dc_v = dltc[-1] * k1 * k2
-            dltc.append(dc_v)
-            dc = cd
-        if ds is None or ds == 0.:
-            ds = (s_v - s_asymp_v)
-            dlts.append(ds * expc)
-        else:
-            k2 = expc / expp
-            sd = s_v - s_asymp_v
-            k1 = sd / ds
-            ds_v = dlts[-1] * k1 * k2
-            dlts.append(ds_v)
-            ds = sd
+        dltc.append((c_v - c_asymp_v) * expc)
+        dlts.append((s_v - s_asymp_v) * expc)
+        # cf.write(f"{t * DT};{c_v};{s_v};{c_asymp_v};{s_asymp_v};{expc}\n")
+    # cf.close()
+    # plt.cla()
+    # plt.clf()
+    # plt.plot(ts, vc, label='numeric')
+    # plt.plot(ts, c_asymp, label='asymp')
+    # plt.legend()
+    # plt.show()
+    # plt.cla()
+    # plt.clf()
+    # plt.plot(ts, vs, label='numeric')
+    # plt.plot(ts, s_asymp, label='asymp')
+    # plt.legend()
+    # plt.show()
     plt.cla()
     plt.clf()
-    plt.plot(ts, vc, label='numeric')
-    plt.plot(ts, c_asymp, label='asymp')
-    plt.legend()
-    plt.show()
-    plt.cla()
-    plt.clf()
-    plt.plot(ts, vs, label='numeric')
-    plt.plot(ts, s_asymp, label='asymp')
-    plt.legend()
-    plt.show()
-    plt.cla()
-    plt.clf()
-    # plt.plot(ts, dltc, label='delta_C')
-    plt.plot(ts, v1, label='delta_C2')
-    # plt.plot(ts, dlts, label='delta_S')
-    plt.plot(ts, v2, label='delta_S2')
+    plt.title(f"x = {tested_xs[i] * DT}")
+    plt.plot(np.array(ts) * DT, dltc, label='delta_C')
+    plt.plot(np.array(ts) * DT, v1, label='delta_C2')
+    plt.plot(np.array(ts) * DT, dlts, label='delta_S')
+    plt.plot(np.array(ts) * DT, v2, label='delta_S2')
     # plt.plot(ts, characteristic, label='characteristic')
     plt.legend()
-    plt.show()
+    plt.savefig(f"results_x={tested_xs[i] * DT}_dt={DT}.png")

@@ -24,18 +24,18 @@ S_max = config['s_m']
 
 Sm = lambda_p * S_max / (lambda_p + k)
 
-
 fig = plt.figure()
 ax = fig.add_subplot(1, 1, 1, projection='3d')
-M_T = 1
-RDT = DT
+M_T = MAX_T - 2 * DT
+RDT = 2 * DT
 tos = np.arange(0., M_T, RDT)
 avs = list()
 for t0 in tos:
-    T = np.arange(t0, 4 * M_T, RDT)
+    T = np.arange(t0, M_T, RDT)
     T0 = t0 * np.ones(len(T))
     X = T - t0
-    a = Sm - interp_s(X, T) / interp_c(X, T) - Sm * np.exp(-lambda_p * X + k * T) + np.exp(k * t0)
+    a = Sm - interp_s(X, T) / interp_c(X, T) - Sm * np.exp(
+        -lambda_p * X + k * T)
     avs.append((T, a))
     ax.scatter(T0, T, a, color='steelblue')
     # if len(a) >= 4:
@@ -53,24 +53,37 @@ for t0 in tos:
     #     print(dd1, dd2)
     #     print((dd1 - dd2) / RDT)
 
-ax.set_xlabel('t0')
-ax.set_ylabel('t')
-plt.show()
+# ax.set_xlabel('t0')
+# ax.set_ylabel('t')
+# plt.show()
 
 tas = list()
 ras = list()
+ras2 = list()
+
+d = 200
 
 for i in range(len(avs)):
     tas.append(tos[i])
-    ras.append(avs[i][1][0])
+    r1 = avs[i][1][0]
     # plt.cla()
     # plt.clf()
     # plt.plot(avs[i][0], avs[i][1])
     # plt.title(f't0 = {tos[i]}')
     # plt.show()
 
+for i in range(len(avs) - d):
+    r2 = avs[i][1][d]
+    ras2.append(r2)
+
+v = np.fft.fft(ras)
+
+tas = np.array(tas)
+# print(v)
+
 plt.cla()
 plt.clf()
-plt.plot(tas, ras)
-plt.title(f't0 = t')
+plt.plot(tas, ras, color='steelblue')
+plt.plot(tas, -Sm*np.exp(tas), color='red')
+plt.plot(tas, ras2, color='orange')
 plt.show()

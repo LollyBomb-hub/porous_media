@@ -10,7 +10,7 @@
 
 #define INDEX_TYPE long long
 
-#define IS_FLOAT
+#define IS_DOUBLE
 
 #ifndef IS_FLOAT
 #ifndef IS_DOUBLE
@@ -25,16 +25,11 @@ constexpr FLOAT_TYPE eps = DBL_EPSILON;
 typedef long long INTEGER_TYPE;
 typedef float FLOAT_TYPE;
 typedef float CONTAINER_TYPE;
-constexpr FLOAT_TYPE eps = FLT_EPSILON;
 #endif
 
 const FLOAT_TYPE one = FLOAT_TYPE(1);
 
 #define to_f(x) FLOAT_TYPE(x)
-
-bool check_differs(FLOAT_TYPE a, FLOAT_TYPE b) {
-    return fabs(a - b) > eps;
-}
 
 
 int main(int argc, char **argv) {

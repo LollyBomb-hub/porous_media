@@ -1,4 +1,5 @@
 import json
+import os
 import os.path as path
 import pickle
 
@@ -22,8 +23,8 @@ def plot_with_condition(passed_df: pd.DataFrame, condition_instance: object, **k
     fixed_x_df.plot(**kwargs)
 
 
-CONFIGURATION_FILE_PATH: str = "C:/Users/a.pesterev/CLionProjects/porous_media/configuration.json"
-RESULT_FOLDER_PATH: str = r"C:\Users\a.pesterev\CLionProjects\porous_media\cmake-build-release-visual-studio\results"
+CONFIGURATION_FILE_PATH: str = "./configuration.json"
+RESULT_FOLDER_PATH: str = r".\cmake-build-release-visual-studio\results"
 
 assert path.exists(CONFIGURATION_FILE_PATH), f"Configuration file path does not exists! {CONFIGURATION_FILE_PATH}"
 
@@ -43,6 +44,10 @@ c_df = c_df.merge(s_df, on=['ix', 'iy', 'x', 'y'])
 del s_df
 
 c_df = c_df.sort_values(['ix', 'iy'])
+
+c_df.replace("-nan(ind)", np.nan, inplace=True)
+# c_df.c = c_df.c.astype(float).fillna(CONFIGURATION['C_0_t'])
+# c_df.s = c_df.s.astype(float).fillna(CONFIGURATION['s_m'])
 
 # Interpolating procedure
 print(c_df.x, c_df.c + c_df.s)
@@ -83,7 +88,7 @@ def test_plot_ix(dataframe, x):
 #     test_plot_iy(c_df, i)
 
 
-PLOT_3D = True
+PLOT_3D = False
 MPL = False
 
 MAX_X = max(c_df.x.values)
@@ -216,19 +221,21 @@ if PLOT_3D:
 
         # mlab.plot3d(X, Y, interpolated_s, interpolated_s, name='S(interp)', colormap='Spectral')
         mlab.plot3d(X, Y, Z_S, Z_S, name='S', colormap='Spectral')
-        mlab.plot3d(X, Y, Z_S + Z_C, name='their_sum', colormap='Spectral')
+        # mlab.plot3d(X, Y, Z_S + Z_C, name='their_sum', colormap='Spectral')
         # mlab.plot3d(X, Y, interp_c(X, Y) - interp_s(X, Y) / 0.5, 'C - S', colormap='Spectral')
         # mlab.plot3d(X, Y, Z_S - interpolated_s, 'C - C(interp)', colormap='Spectral')
         mlab.axes(xlabel='X', ylabel='Y', zlabel='Z', ranges=[min(X), max(X), min(Y), max(Y), min(Z_S), max(Z_S)])
         mlab.show()
 
 subplot_number = 111
-plotted_t = [0.5, 1., 2., 5.]
+XMAX_T = CONFIGURATION['max_t']
+plotted_t = list(np.arange(0, XMAX_T, 0.1))
 
 XMIN_T = 0
-XMAX_T = 45
 YMIN = 0
 YMAX = 1
+
+os.makedirs('images/t/', exist_ok=True)
 
 for plotted_t_v in plotted_t:
     print(plotted_t_v)
@@ -237,50 +244,53 @@ for plotted_t_v in plotted_t:
     inner_df = c_df[condition]
     # print(inner_df)
     x_v = inner_df.x.values.tolist()
-    max_x_v = max(x_v)
-    c_v = list(inner_df.c.values)
-    s_v = list(inner_df.s.values)
-    plt.title(f"t = {str(plotted_t_v)}")
+    if len(x_v) != 0:
+        max_x_v = max(x_v)
+        c_v = list(inner_df.c.values)
+        s_v = list(inner_df.s.values)
+        plt.title(f"t = {str(plotted_t_v)}")
 
-    x_zeros = np.arange(max_x_v, MAX_X, 0.1)
+        x_zeros = np.arange(max_x_v, MAX_X, 0.1)
 
-    zeros_y = np.zeros(len(x_zeros)).tolist()
+        zeros_y = np.zeros(len(x_zeros)).tolist()
 
-    x_v += x_zeros.tolist()
-    c_v += zeros_y
-    s_v += zeros_y
+        x_v += x_zeros.tolist()
+        c_v += zeros_y
+        s_v += zeros_y
 
-    plt.xlim((XMIN_T, XMAX_T))
-    plt.ylim((YMIN, YMAX))
-    plt.plot(x_v, c_v, label='Suspended concentration C', **PLOTTING_ARGS_C)
-    plt.plot(x_v, s_v, label='Retained concentration S', **PLOTTING_ARGS_S)
+        plt.xlim((XMIN_T, XMAX_T))
+        plt.ylim((YMIN, YMAX))
+        plt.plot(x_v, c_v, label='Suspended concentration C', **PLOTTING_ARGS_C)
+        plt.plot(x_v, s_v, label='Retained concentration S', **PLOTTING_ARGS_S)
 
-    plt.ylabel("C,S", rotation=0, y=1, horizontalalignment='right')
-    plt.xlabel("x", x=1, horizontalalignment='right')
+        plt.ylabel("C,S", rotation=0, y=1, horizontalalignment='right')
+        plt.xlabel("x", x=1, horizontalalignment='right')
 
-    plt.legend(**LEGEND_SETTINGS)
-    fig = plt.gcf()
-    fig.set_size_inches(6, 6)
+        plt.legend(**LEGEND_SETTINGS)
+        fig = plt.gcf()
+        fig.set_size_inches(6, 6)
 
-    plt.savefig(f"./images/t = {str(plotted_t_v)}.tiff", dpi=DPI)
+        plt.savefig(f"./images/t/t({plotted_t.index(plotted_t_v):02d}) = {str(plotted_t_v)}.tiff", dpi=DPI)
 
-    plt.clf()
-    plt.cla()
+        plt.clf()
+        plt.cla()
 
 MAX_T = CONFIGURATION['max_t']
 dt = CONFIGURATION['dt']
 
-t = np.arange(0, MAX_T + dt, dt)
+t = np.arange(0, MAX_T, dt)
 
 # for erosion!
-plotted_xs = [0.1, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85, 1., 2., 5., 10., 15., 20., 25., 30.]
+plotted_xs = list(np.arange(0, MAX_X, 0.1))
 # no erosion
 # plotted_xs = [0.1, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85, 1.]
 
 initial = c_df[c_df.ix == 0]
 
 XMIN_X = 0
-XMAX_X = 30
+XMAX_X = CONFIGURATION['max_t']
+
+os.makedirs('images/x/', exist_ok=True)
 
 subplot_number = 111
 ax: plt.Axes = plt.subplot(subplot_number)
@@ -294,7 +304,7 @@ plt.ylabel("C,S", rotation=0, y=1., horizontalalignment='right')
 plt.xlabel("t", x=1., horizontalalignment='right')
 fig = plt.gcf()
 fig.set_size_inches(6, 6)
-plt.savefig("./images/x = 0.tiff", dpi=DPI)
+plt.savefig("./images/x/x(00) = 0.tiff", dpi=DPI)
 plt.cla()
 
 DELTA_0 = CONFIGURATION['delta_0']
@@ -306,7 +316,7 @@ print(len(t))
 
 def ds_dt(S, C):
     def Delta(S):
-        return DELTA_0 * (1 - S / S_M)
+        return (DELTA_0 * (S_M - S))**0.5
 
     def F(S):
         return F0 * S
@@ -327,21 +337,21 @@ for plotted_x in plotted_xs:
             m_x = -1
         else:
             m_x = max(time_slice.x.values)
-        if m_x > plotted_x:
-            print(m_x, t[t_dot], set(time_slice.y.values))
+        if m_x >= plotted_x:
+            print(m_x, t[t_dot])
             from_t = t[t_dot:]
             with_x = plotted_x * np.ones(len(from_t))
             dots = np.stack([with_x, from_t], -1)
             for c_calc in interp_c(dots):
-                prev_s = plotted_s[-1]
                 plotted_c.append(c_calc)
-                plotted_s.append(prev_s + dt * ds_dt(prev_s, c_calc))
+            for s_calc in interp_s(dots):
+                plotted_s.append(s_calc)
             break
         else:
             plotted_c.append(0.)
             plotted_s.append(0.)
 
-    # print(np.stack([t, plotted_c, plotted_s], -1))
+    print(np.stack([t, plotted_c, plotted_s], -1))
     fig = plt.gcf()
     fig.set_size_inches(6, 6)
     plt.title(f"x = {plotted_x}")
@@ -352,7 +362,8 @@ for plotted_x in plotted_xs:
     ax.plot(t, plotted_c, label='Suspended concentration C', **PLOTTING_ARGS_C)
     ax.plot(t, plotted_s, label='Retained concentration S', **PLOTTING_ARGS_S)
     plt.legend(**LEGEND_SETTINGS)
-    plt.savefig(f"./images/x = {plotted_x}.tiff", dpi=DPI)
+    plt.savefig(f"./images/x/x({(plotted_xs.index(plotted_x) + 1):02d}) = {plotted_x}.tiff", dpi=DPI)
+    # plt.show()
     plt.cla()
 
 # condition = c_df.ix == plotted_x
